@@ -1,0 +1,127 @@
+/*
+https://docs.oracle.com/javase/tutorial/jdbc/basics/sqlexception.html
+https://docs.oracle.com/cd/E19159-01/819-3681/abehq/index.html
+ */
+package com.ruslan.dataaccess;
+
+import com.mysql.cj.jdbc.MysqlDataSource;
+import javafx.util.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+public abstract class DataAccess {
+    protected Logger logger = LoggerFactory.getLogger(DataAccess.class);
+    public DataAccess() {
+    }
+
+    protected DataSource getDataSource() {
+
+        MysqlDataSource dataSource = new MysqlDataSource();
+        dataSource.setURL(getDataSourceUrl());
+        dataSource.setUser(getUser());
+        dataSource.setPassword(getPassword());
+        // the rest of configuration to be added
+        return dataSource;
+    }
+
+    protected final int executeUpdate(String sqlString, Map<Integer, Object> params) {
+        int defaultResult = -1;
+        try (Connection connection = getDataSource().getConnection()) {
+            Optional<PreparedStatement> optional = getPreparedStatement(connection, sqlString);
+            if (optional.isPresent()) {
+                PreparedStatement statement = optional.get();
+                for (Map.Entry<Integer, Object> entry : params.entrySet()) {
+                    int key = entry.getKey();
+                    Object val = entry.getValue();
+                    statement.setObject(key, val);
+                }
+                return statement.executeUpdate();
+            }
+
+        } catch (SQLTimeoutException exp) {
+            logError(exp, "error");
+
+        } catch (SQLException exp) {
+            logError(exp, "error");
+        }
+
+        return defaultResult;
+    }
+
+    protected final Optional<int[]> executeBatch(String sqlString, List<Map<Integer, Object>> params) {
+        try (Connection connection = getDataSource().getConnection()) {
+            Optional<PreparedStatement> optional = getPreparedStatement(connection, sqlString);
+            if (optional.isPresent() && batchStatements(optional.get(), params)) {
+                return  Optional.of(optional.get().executeBatch());
+            }
+
+        } catch (SQLTimeoutException exp) {
+            logError(exp, "error");
+
+        } catch (SQLException exp) {
+            logError(exp, "error");
+        }
+        return Optional.empty();
+    }
+
+    protected boolean batchStatements(PreparedStatement sqlStatement, List<Map<Integer, Object>> params) {
+        final boolean[] success = {true};
+        params.forEach((m) -> {
+            for (Map.Entry<Integer, Object> entry : m.entrySet()) {
+                int key = entry.getKey();
+                Object val = entry.getValue();
+                try {
+                    sqlStatement.setObject(key, val);
+                } catch (SQLException exception) {
+                    logError(exception, "error");
+                    success[0] = false;
+                }
+            }
+            if (!success[0]) return;
+            try {
+                sqlStatement.addBatch();
+            } catch (SQLException exception) {
+                logError(exception, "error");
+                return;
+            }
+        });
+        return success[0];
+    }
+
+
+    protected void logError(Exception error, String message) {
+        logger.error(message, error);
+    }
+
+    protected Optional<PreparedStatement> getPreparedStatement(Connection connection, String sqlString) {
+        try {
+            return Optional.of(connection.prepareStatement(sqlString));
+        } catch (SQLException exception) {
+            logError(exception, null);
+        }
+        return Optional.empty();
+    }
+
+    protected String getDataSourceUrl() {
+        return "jdbc:mysql://localhost:3306/test_db";
+    }
+
+    protected String getUser() {
+        return "ruslan";
+    }
+
+    protected String getPassword() {
+        return "router7200";
+    }
+}
