@@ -1,0 +1,35 @@
+package com.ruslan.dataaccess;
+
+
+import javafx.util.Pair;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+@Service
+public class DataAgentDataAccessImpl extends DataAccess implements DataAgentDataAccess {
+    private static final String SQL_INSERT = "insert into User (id, firstname, lastname) values (? ,?,?);";
+
+    public DataAgentDataAccessImpl() {
+        super();
+    }
+
+    public int saveUser(int id, String firstName, String lastName) {
+        Map<Integer, Object> map = new HashMap<>();
+        map.put(1, id);
+        map.put(2, firstName);
+        map.put(3, lastName);
+        return this.executeUpdate(SQL_INSERT, map);
+    }
+
+    public Optional<int[]> saveBatch(int id, String firstName, String lastName) {
+        List<Map<Integer, Object>> params = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            Map<Integer, Object> map = new HashMap<>();
+            map.put(1, id);
+            map.put(2, firstName);
+            map.put(3, lastName);
+            params.add(map);
+        }
+        return this.executeBatch(SQL_INSERT, params);
+    }
+}
